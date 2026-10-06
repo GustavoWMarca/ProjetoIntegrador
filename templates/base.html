@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Planejamento de cargas de caminhão com o Algoritmo da Mochila.">
+    <title>{% block title %}Stockwise{% endblock %} · Planejamento de cargas</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="shell nav-wrap">
+            <a class="brand" href="{{ url_for('index') }}" aria-label="Stockwise — início">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+                </span>
+                <span>Stockwise</span>
+            </a>
+            <nav class="main-nav" aria-label="Navegação principal">
+                <a class="{{ 'active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">Visão geral</a>
+                <a class="{{ 'active' if request.endpoint in ['products', 'product_new', 'product_edit'] else '' }}" href="{{ url_for('products') }}">Produtos</a>
+                <a class="{{ 'active' if request.endpoint == 'loads' else '' }}" href="{{ url_for('loads') }}">Liberar cargas</a>
+                <a class="nav-action {{ 'active' if request.endpoint == 'load_plan' else '' }}" href="{{ url_for('load_plan') }}">Planejar carga</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="shell page-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-stack" aria-live="polite">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            <span class="flash-dot" aria-hidden="true"></span>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="shell footer-content">
+            <span>Projeto Integrador · Algoritmo Knapsack</span>
+            <span>Python + Flask + SQLite</span>
+        </div>
+    </footer>
+</body>
+</html>

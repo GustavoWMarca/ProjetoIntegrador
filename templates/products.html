@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Produtos{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Inventário</span>
+        <h1>Produtos cadastrados</h1>
+        <p>Gerencie os dados e a disponibilidade de cada item.</p>
+    </div>
+    <a class="button button-primary" href="{{ url_for('product_new') }}"><span aria-hidden="true">＋</span> Novo produto</a>
+</div>
+
+<section class="panel table-panel">
+    <div class="toolbar">
+        <form class="search-form" method="get" role="search">
+            <span aria-hidden="true">⌕</span>
+            <label class="sr-only" for="q">Pesquisar produtos</label>
+            <input id="q" name="q" value="{{ search }}" placeholder="Buscar por nome ou código">
+        </form>
+        <span class="record-count">{{ products|length }} {{ 'resultado' if products|length == 1 else 'resultados' }}</span>
+    </div>
+
+    {% if products %}
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Produto</th>
+                        <th>Carga/espaço</th>
+                        <th>Custo unitário</th>
+                        <th>Valor agregado</th>
+                        <th>Disponibilidade</th>
+                        <th class="actions-column"><span class="sr-only">Ações</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                        <tr>
+                            <td>
+                                <div class="product-cell">
+                                    <span class="product-avatar">{{ product['name'][0]|upper }}</span>
+                                    <span><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span>
+                                </div>
+                            </td>
+                            <td>{{ product['weight_milli']|weight }}</td>
+                            <td>{{ product['cost_cents']|money }}</td>
+                            <td><span class="score-badge">{{ product['value_units']|score }}</span></td>
+                            <td>
+                                <span class="quantity-badge {{ 'out' if product['available'] == 0 else '' }}">{{ product['available'] }} disponíveis</span>
+                                {% if product['reserved'] %}<small class="reserved-note">{{ product['reserved'] }} reservadas de {{ product['quantity'] }}</small>{% endif %}
+                            </td>
+                            <td>
+                                <div class="row-actions">
+                                    <a class="icon-button" title="Editar {{ product['name'] }}" href="{{ url_for('product_edit', product_id=product['id']) }}">✎</a>
+                                    <form method="post" action="{{ url_for('product_delete', product_id=product['id']) }}" onsubmit='return confirm({{ ("Excluir o produto “" ~ product["name"] ~ "”?")|tojson }});'>
+                                        <button class="icon-button danger" title="Excluir {{ product['name'] }}" type="submit">×</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">⌕</span>
+            <h3>{{ 'Nenhum produto encontrado' if search else 'Nenhum produto cadastrado' }}</h3>
+            <p>{{ 'Tente pesquisar usando outro nome ou código.' if search else 'Adicione o primeiro item do seu inventário.' }}</p>
+            {% if not search %}<a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar produto</a>{% endif %}
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

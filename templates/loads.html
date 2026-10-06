@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Liberação de cargas{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div><span class="eyebrow">Expedição</span><h1>Liberação de cargas</h1><p>Confira as cargas reservadas e libere o caminhão quando ele sair do estoque.</p></div>
+    <a class="button button-primary" href="{{ url_for('load_plan') }}"><span aria-hidden="true">＋</span> Planejar nova carga</a>
+</div>
+
+{% if loads %}
+<div class="loads-list">
+    {% for load in loads %}
+    <article class="panel load-card {{ 'highlighted-load' if highlight == load['id'] else '' }}">
+        <div class="load-card-header">
+            <div class="load-identity">
+                <span class="truck-icon" aria-hidden="true">⇥</span>
+                <div><span class="eyebrow">{{ load['truck_identifier'] }}</span><h2>{{ load['name'] }}</h2><small>Criada em {{ load['created_at']|datetime_pt }}</small></div>
+            </div>
+            <span class="status-badge"><span></span> Aguardando liberação</span>
+        </div>
+
+        <div class="load-summary-grid">
+            <div><small>Unidades</small><strong>{{ load['total_units'] }}</strong></div>
+            <div><small>Carga total</small><strong>{{ load['total_weight_milli']|weight }}</strong></div>
+            <div><small>Custo total</small><strong>{{ load['total_cost_cents']|money }}</strong></div>
+            <div><small>Valor agregado</small><strong>{{ load['total_value_units']|score }}</strong></div>
+        </div>
+
+        <div class="utilization-grid load-utilization">
+            <article><div><span>Ocupação do caminhão</span><strong>{{ load['total_weight_milli']|weight }} / {{ load['max_weight_milli']|weight }}</strong></div><progress value="{{ load['total_weight_milli'] }}" max="{{ load['max_weight_milli'] }}"></progress></article>
+            {% if load['constraint_mode'] == 'budget' %}
+                <article><div><span>Uso do orçamento</span><strong>{{ load['total_cost_cents']|money }} / {{ load['max_budget_cents']|money }}</strong></div><progress value="{{ load['total_cost_cents'] }}" max="{{ load['max_budget_cents'] if load['max_budget_cents'] > 0 else 1 }}"></progress></article>
+            {% else %}
+                <article><div><span>Uso do limite de unidades</span><strong>{{ load['total_units'] }} / {{ load['max_units'] }} un.</strong></div><progress value="{{ load['total_units'] }}" max="{{ load['max_units'] }}"></progress></article>
+            {% endif %}
+        </div>
+
+        <div class="table-scroll load-items-table">
+            <table><thead><tr><th>Produto reservado</th><th>Quantidade</th><th>Carga</th><th>Custo</th></tr></thead><tbody>
+                {% for item in load['items'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product_name'][0]|upper }}</span><span><strong>{{ item['product_name'] }}</strong><small>{{ item['product_code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }} un.</strong></td><td>{{ (item['unit_weight_milli'] * item['quantity'])|weight }}</td><td>{{ (item['unit_cost_cents'] * item['quantity'])|money }}</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+
+        <div class="release-bar">
+            <p><strong>Ao liberar:</strong> as unidades serão baixadas do estoque e esta carga desaparecerá das pendências.</p>
+            <form method="post" action="{{ url_for('load_release', load_id=load['id']) }}" onsubmit='return confirm({{ ("Liberar a carga “" ~ load["name"] ~ "”? O estoque será baixado e a carga será excluída.")|tojson }});'>
+                <button class="button release-button" type="submit">Liberar caminhão <span aria-hidden="true">→</span></button>
+            </form>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<section class="panel empty-state loads-empty"><span class="empty-icon" aria-hidden="true">⇥</span><h2>Nenhuma carga aguardando liberação</h2><p>Planeje uma carga para reservar os produtos e acompanhar a saída do caminhão.</p><a class="button button-primary" href="{{ url_for('load_plan') }}">Planejar primeira carga</a></section>
+{% endif %}
+{% endblock %}

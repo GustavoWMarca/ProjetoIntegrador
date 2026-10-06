@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Executar Stockwise",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "flask",
+            "env": {
+                "FLASK_APP": "app",
+                "FLASK_DEBUG": "1"
+            },
+            "args": [
+                "run",
+                "--no-reload"
+            ],
+            "jinja": true,
+            "console": "integratedTerminal"
+        }
+    ]
+}

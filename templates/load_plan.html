@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Planejar carga{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">Algoritmo da Mochila</span>
+        <h1>Planejar carga do caminhão</h1>
+        <p>Escolha os produtos candidatos e encontre a combinação de maior valor para o veículo.</p>
+    </div>
+    <span class="algorithm-badge"><span></span> Solução exata</span>
+</div>
+
+<form id="load-plan-form" method="post" class="load-plan-form">
+    <section class="panel form-card">
+        <div class="form-section-heading">
+            <span class="section-number">01</span>
+            <div><h2>Identificação e capacidade</h2><p>Dados usados para reconhecer a carga na tela de liberação.</p></div>
+        </div>
+        <div class="form-grid three-columns load-basics-grid">
+            <div class="field">
+                <label for="name">Nome ou referência da carga</label>
+                <input id="name" name="name" maxlength="100" value="{{ form['name'] }}" placeholder="Ex.: Entrega Centro 01" required autofocus>
+            </div>
+            <div class="field">
+                <label for="truck_identifier">Placa ou identificação do caminhão</label>
+                <input id="truck_identifier" name="truck_identifier" maxlength="60" value="{{ form['truck_identifier'] }}" placeholder="Ex.: ABC1D23" required>
+            </div>
+            <div class="field">
+                <label for="max_weight">Capacidade máxima de carga</label>
+                <div class="input-suffix"><input id="max_weight" name="max_weight" inputmode="decimal" value="{{ form['max_weight'] }}" placeholder="Ex.: 12.500,000" required><span>un.</span></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel form-card">
+        <div class="form-section-heading">
+            <span class="section-number">02</span>
+            <div><h2>Segundo limite da carga</h2><p>Além do peso, escolha se o caminhão será limitado por orçamento ou número de unidades.</p></div>
+        </div>
+        <div class="constraint-layout" data-constraint-controller>
+            <div class="constraint-options" role="radiogroup" aria-label="Tipo do segundo limite">
+                <label class="constraint-option">
+                    <input type="radio" name="constraint_mode" value="budget" {{ 'checked' if form['constraint_mode'] == 'budget' else '' }}>
+                    <span><strong>Por orçamento</strong><small>Restringe o custo total dos produtos.</small></span>
+                </label>
+                <label class="constraint-option">
+                    <input type="radio" name="constraint_mode" value="quantity" {{ 'checked' if form['constraint_mode'] == 'quantity' else '' }}>
+                    <span><strong>Por quantidade</strong><small>Restringe o total de unidades carregadas.</small></span>
+                </label>
+            </div>
+            <div class="constraint-field">
+                <div class="field mode-field" data-mode-field="budget" {{ 'hidden' if form['constraint_mode'] != 'budget' else '' }}>
+                    <label for="max_budget">Orçamento máximo</label>
+                    <div class="input-prefix large"><span>R$</span><input id="max_budget" name="max_budget" inputmode="decimal" value="{{ form['max_budget'] }}" placeholder="Ex.: 5.000,00"></div>
+                </div>
+                <div class="field mode-field" data-mode-field="quantity" {{ 'hidden' if form['constraint_mode'] != 'quantity' else '' }}>
+                    <label for="max_units">Quantidade máxima de produtos</label>
+                    <div class="input-suffix large"><input id="max_units" name="max_units" type="number" min="1" step="1" value="{{ form['max_units'] }}" placeholder="Ex.: 80"><span>un.</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel product-selector" data-product-selector>
+        <div class="panel-heading selector-heading">
+            <div><span class="eyebrow">03 · Produtos candidatos</span><h2>O que deve entrar neste caminhão?</h2><p>O mínimo garante diversidade; o máximo impede que um produto domine toda a carga.</p></div>
+            <button class="button button-secondary button-small" type="button" data-select-all>Selecionar disponíveis</button>
+        </div>
+
+        {% if products %}
+            <div class="table-scroll">
+                <table class="selection-table">
+                    <thead><tr><th class="check-column"><span class="sr-only">Selecionar</span></th><th>Produto</th><th>Carga unitária</th><th>Custo</th><th>Valor</th><th>Disponível</th><th>Mínimo obrigatório</th><th>Máximo permitido</th></tr></thead>
+                    <tbody>
+                        {% for product in products %}
+                            {% set selected = product['id'] in form['selected_ids'] %}
+                            <tr class="{{ 'unavailable-row' if product['available'] == 0 else '' }}" data-product-row>
+                                <td class="check-column"><input class="product-checkbox" type="checkbox" id="include_{{ product['id'] }}" name="include_{{ product['id'] }}" value="1" {{ 'checked' if selected else '' }} {{ 'disabled' if product['available'] == 0 else '' }} data-product-checkbox></td>
+                                <td><label class="product-cell selectable-product" for="include_{{ product['id'] }}"><span class="product-avatar small">{{ product['name'][0]|upper }}</span><span><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span></label></td>
+                                <td>{{ product['weight_milli']|weight }}</td>
+                                <td>{{ product['cost_cents']|money }}</td>
+                                <td><span class="score-badge">{{ product['value_units']|score }}</span></td>
+                                <td><strong>{{ product['available'] }}</strong>{% if product['reserved'] %}<small class="reserved-note">{{ product['reserved'] }} reservadas</small>{% endif %}</td>
+                                <td><input class="limit-input" aria-label="Mínimo de {{ product['name'] }}" name="min_{{ product['id'] }}" type="number" min="0" max="{{ product['available'] }}" step="1" value="{{ form['minimums'].get(product['id'], 1) }}" {{ 'disabled' if not selected else '' }} data-min-input></td>
+                                <td><input class="limit-input" aria-label="Máximo de {{ product['name'] }}" name="max_{{ product['id'] }}" type="number" min="1" max="{{ product['available'] }}" step="1" value="{{ form['maximums'].get(product['id'], product['available']) }}" {{ 'disabled' if not selected else '' }} data-max-input></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="selector-footer">
+                <span><strong data-selected-count>{{ form['selected_ids']|length }}</strong> produto(s) candidato(s)</span>
+                <button class="button button-primary" type="submit" name="action" value="calculate">Calcular prévia da carga <span aria-hidden="true">→</span></button>
+            </div>
+        {% else %}
+            <div class="empty-state"><span class="empty-icon">□</span><h3>Nenhum produto cadastrado</h3><p>Cadastre o inventário antes de planejar a primeira carga.</p><a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar produto</a></div>
+        {% endif %}
+    </section>
+</form>
+
+{% if result %}
+<section class="panel load-preview">
+    <div class="result-header">
+        <div><span class="success-label">✓ Prévia calculada</span><h2>{{ result['total_value']|score }} <small>pontos de valor</small></h2></div>
+        <button class="button button-primary" type="submit" form="load-plan-form" name="action" value="save">Salvar e reservar carga</button>
+    </div>
+    <div class="utilization-grid preview-utilization">
+        <article>
+            <div><span>Carga utilizada</span><strong>{{ result['total_weight']|weight }} / {{ result['max_weight']|weight }}</strong></div>
+            <progress value="{{ result['total_weight'] }}" max="{{ result['max_weight'] }}"></progress>
+            <small>{{ result['remaining_weight']|weight }} disponíveis</small>
+        </article>
+        {% if result['constraint_mode'] == 'budget' %}
+            <article><div><span>Orçamento utilizado</span><strong>{{ result['total_cost']|money }} / {{ result['max_budget']|money }}</strong></div><progress value="{{ result['total_cost'] }}" max="{{ result['max_budget'] if result['max_budget'] > 0 else 1 }}"></progress><small>{{ result['remaining_constraint']|money }} disponíveis</small></article>
+        {% else %}
+            <article><div><span>Quantidade utilizada</span><strong>{{ result['total_units'] }} / {{ result['max_units'] }} un.</strong></div><progress value="{{ result['total_units'] }}" max="{{ result['max_units'] }}"></progress><small>{{ result['remaining_constraint'] }} unidades disponíveis</small></article>
+        {% endif %}
+    </div>
+    <div class="result-table-wrap preview-table-wrap">
+        <table class="result-table">
+            <thead><tr><th>Produto</th><th>Qtd.</th><th>Carga</th><th>Custo</th><th>Valor</th></tr></thead>
+            <tbody>{% for item in result['selected'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product']['name'][0]|upper }}</span><span><strong>{{ item['product']['name'] }}</strong><small>{{ item['product']['code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }}</strong></td><td>{{ item['subtotal_weight']|weight }}</td><td>{{ item['subtotal_cost']|money }}</td><td><span class="score-badge">{{ item['subtotal_value']|score }}</span></td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    <p class="calculation-meta">{{ result['mandatory_units'] }} unidades mínimas garantidas · {{ result['total_units'] }} unidades selecionadas · {{ result['states_evaluated']|number_pt }} estados finais avaliados</p>
+</section>
+{% endif %}
+{% endblock %}

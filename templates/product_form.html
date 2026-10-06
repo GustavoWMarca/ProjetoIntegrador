@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="page-heading narrow-heading">
+    <div>
+        <a class="back-link" href="{{ url_for('products') }}">← Voltar para produtos</a>
+        <h1>{{ title }}</h1>
+        <p>Preencha os dados usados pelo algoritmo para comparar este produto.</p>
+    </div>
+</div>
+
+<form class="form-layout" method="post" novalidate>
+    <section class="panel form-card">
+        <div class="form-section-heading">
+            <span class="section-number">01</span>
+            <div><h2>Identificação</h2><p>Como o item aparecerá no sistema.</p></div>
+        </div>
+        <div class="form-grid two-columns">
+            <div class="field">
+                <label for="code">Código do produto</label>
+                <input id="code" name="code" maxlength="30" value="{{ form['code'] }}" placeholder="Ex.: P001" required autofocus>
+                <small>Identificador único no inventário.</small>
+            </div>
+            <div class="field">
+                <label for="name">Nome do produto</label>
+                <input id="name" name="name" maxlength="120" value="{{ form['name'] }}" placeholder="Ex.: Cafeteira elétrica" required>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel form-card">
+        <div class="form-section-heading">
+            <span class="section-number">02</span>
+            <div><h2>Dados para otimização</h2><p>Valores unitários considerados pelo Knapsack.</p></div>
+        </div>
+        <div class="form-grid three-columns">
+            <div class="field">
+                <label for="weight">Peso ou carga unitária</label>
+                <div class="input-suffix"><input id="weight" name="weight" inputmode="decimal" value="{{ form['weight'] }}" placeholder="0,000" required><span>un.</span></div>
+                <small>Aceita até três casas decimais.</small>
+            </div>
+            <div class="field">
+                <label for="cost">Custo unitário</label>
+                <div class="input-prefix"><span>R$</span><input id="cost" name="cost" inputmode="decimal" value="{{ form['cost'] }}" placeholder="0,00" required></div>
+            </div>
+            <div class="field">
+                <label for="value">Valor agregado</label>
+                <input id="value" name="value" inputmode="decimal" value="{{ form['value'] }}" placeholder="0,00" required>
+                <small>Pontuação que o algoritmo maximiza.</small>
+            </div>
+        </div>
+        <div class="form-grid stock-row">
+            <div class="field">
+                <label for="quantity">Quantidade disponível</label>
+                <div class="input-suffix"><input id="quantity" name="quantity" type="number" min="0" step="1" value="{{ form['quantity'] }}" placeholder="0" required><span>un.</span></div>
+                <small>O algoritmo nunca selecionará mais do que este limite.</small>
+            </div>
+        </div>
+    </section>
+
+    <div class="form-actions">
+        <a class="button button-secondary" href="{{ url_for('products') }}">Cancelar</a>
+        <button class="button button-primary" type="submit">{{ submit_label }}</button>
+    </div>
+</form>
+{% endblock %}

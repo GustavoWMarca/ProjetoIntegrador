@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Visão geral{% endblock %}
+
+{% block content %}
+<section class="welcome-panel">
+    <div>
+        <span class="eyebrow">Expedição inteligente</span>
+        <h1>Planeje cada caminhão com a melhor combinação de produtos.</h1>
+        <p>Escolha os produtos, informe a capacidade do veículo e limite por orçamento ou quantidade. O sistema monta e reserva a carga ideal.</p>
+    </div>
+    <div class="welcome-actions">
+        <a class="button button-primary" href="{{ url_for('load_plan') }}">
+            Planejar nova carga
+            <span aria-hidden="true">→</span>
+        </a>
+        <a class="button button-secondary" href="{{ url_for('product_new') }}">Cadastrar produto</a>
+    </div>
+</section>
+
+<section class="stats-grid" aria-label="Resumo do estoque">
+    <article class="stat-card">
+        <span class="stat-icon icon-blue" aria-hidden="true">▦</span>
+        <div><span class="stat-label">Tipos de produto</span><strong>{{ summary['product_types']|number_pt }}</strong></div>
+    </article>
+    <article class="stat-card">
+        <span class="stat-icon icon-green" aria-hidden="true">#</span>
+        <div><span class="stat-label">Unidades no estoque</span><strong>{{ summary['total_units']|number_pt }}</strong></div>
+    </article>
+    <article class="stat-card">
+        <span class="stat-icon icon-amber" aria-hidden="true">◇</span>
+        <div><span class="stat-label">Unidades reservadas</span><strong>{{ load_summary['reserved_units']|number_pt }}</strong></div>
+    </article>
+    <article class="stat-card">
+        <span class="stat-icon icon-violet" aria-hidden="true">⇥</span>
+        <div><span class="stat-label">Cargas aguardando liberação</span><strong>{{ load_summary['pending_loads']|number_pt }}</strong></div>
+    </article>
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div>
+            <span class="eyebrow">Inventário</span>
+            <h2>Produtos recentes</h2>
+        </div>
+        <a class="text-link" href="{{ url_for('products') }}">Ver todos <span aria-hidden="true">→</span></a>
+    </div>
+
+    {% if recent_products %}
+        <div class="compact-list">
+            {% for product in recent_products %}
+                <a class="compact-row" href="{{ url_for('product_edit', product_id=product['id']) }}">
+                    <span class="product-avatar">{{ product['name'][0]|upper }}</span>
+                    <span class="compact-main"><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span>
+                    <span class="compact-metric"><small>Disponível para carga</small><strong>{{ product['available'] }} un.</strong></span>
+                    <span class="compact-metric"><small>Reservado</small><strong>{{ product['reserved'] }} un.</strong></span>
+                    <span class="row-arrow" aria-hidden="true">›</span>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">□</span>
+            <h3>Seu inventário está vazio</h3>
+            <p>Cadastre os produtos para começar a planejar as cargas dos caminhões.</p>
+            <a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar primeiro produto</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
