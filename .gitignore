@@ -1,5 +1,4 @@
 __pycache__/
 *.py[cod]
 .venv/
-instance/*.db
 .pytest_cache/
