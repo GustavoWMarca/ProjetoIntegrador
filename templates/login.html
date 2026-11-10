@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+    <section class="panel auth-card">
+        <span class="eyebrow">Acesso restrito</span>
+        <h1>Entrar no Stockwise</h1>
+        <p>Faça login para cadastrar produtos, planejar cargas e liberar caminhões.</p>
+        <form method="post" class="auth-form" novalidate>
+            <div class="field">
+                <label for="username">Usuário</label>
+                <input id="username" name="username" autocomplete="username" value="{{ request.form.get('username', '') }}" required autofocus>
+            </div>
+            <div class="field">
+                <label for="password">Senha</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+            </div>
+            <button class="button button-primary" type="submit">Entrar</button>
+        </form>
+        <small class="auth-hint">Usuário inicial: admin · senha inicial: admin</small>
+    </section>
+</div>
+{% endblock %}

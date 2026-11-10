@@ -26,6 +26,12 @@
                 <a class="{{ 'active' if request.endpoint in ['products', 'product_new', 'product_edit'] else '' }}" href="{{ url_for('products') }}">Produtos</a>
                 <a class="{{ 'active' if request.endpoint == 'loads' else '' }}" href="{{ url_for('loads') }}">Liberar cargas</a>
                 <a class="nav-action {{ 'active' if request.endpoint == 'load_plan' else '' }}" href="{{ url_for('load_plan') }}">Planejar carga</a>
+                {% if current_user %}
+                    <span class="user-chip">{{ current_user['username'] }}</span>
+                    <form class="logout-form" method="post" action="{{ url_for('logout') }}"><button class="nav-login-button" type="submit">Sair</button></form>
+                {% else %}
+                    <a class="nav-login-button" href="{{ url_for('login') }}">Entrar</a>
+                {% endif %}
             </nav>
         </div>
     </header>

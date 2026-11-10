@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-heading">
     <div><span class="eyebrow">Expedição</span><h1>Liberação de cargas</h1><p>Confira as cargas reservadas e libere o caminhão quando ele sair do estoque.</p></div>
-    <a class="button button-primary" href="{{ url_for('load_plan') }}"><span aria-hidden="true">＋</span> Planejar nova carga</a>
+    {% if current_user %}<a class="button button-primary" href="{{ url_for('load_plan') }}"><span aria-hidden="true">＋</span> Planejar nova carga</a>{% else %}<a class="button button-secondary" href="{{ url_for('login') }}">Entrar para alterar</a>{% endif %}
 </div>
 
 {% if loads %}
@@ -49,14 +49,16 @@
 
         <div class="release-bar">
             <p><strong>Ao liberar:</strong> as unidades serão baixadas do estoque e esta carga desaparecerá das pendências.</p>
+            {% if current_user %}
             <form method="post" action="{{ url_for('load_release', load_id=load['id']) }}" onsubmit='return confirm({{ ("Liberar a carga “" ~ load["name"] ~ "”? O estoque será baixado e a carga será excluída.")|tojson }});'>
                 <button class="button release-button" type="submit">Liberar caminhão <span aria-hidden="true">→</span></button>
             </form>
+            {% else %}<a class="button button-secondary" href="{{ url_for('login') }}">Entrar para liberar</a>{% endif %}
         </div>
     </article>
     {% endfor %}
 </div>
 {% else %}
-<section class="panel empty-state loads-empty"><span class="empty-icon" aria-hidden="true">⇥</span><h2>Nenhuma carga aguardando liberação</h2><p>Planeje uma carga para reservar os produtos e acompanhar a saída do caminhão.</p><a class="button button-primary" href="{{ url_for('load_plan') }}">Planejar primeira carga</a></section>
+<section class="panel empty-state loads-empty"><span class="empty-icon" aria-hidden="true">⇥</span><h2>Nenhuma carga aguardando liberação</h2><p>Planeje uma carga para reservar os produtos e acompanhar a saída do caminhão.</p>{% if current_user %}<a class="button button-primary" href="{{ url_for('load_plan') }}">Planejar primeira carga</a>{% else %}<a class="button button-secondary" href="{{ url_for('login') }}">Entrar para planejar</a>{% endif %}</section>
 {% endif %}
 {% endblock %}

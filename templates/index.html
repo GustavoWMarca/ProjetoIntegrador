@@ -9,11 +9,11 @@
         <p>Escolha os produtos, informe a capacidade do veículo e limite por orçamento ou quantidade. O sistema monta e reserva a carga ideal.</p>
     </div>
     <div class="welcome-actions">
-        <a class="button button-primary" href="{{ url_for('load_plan') }}">
+        <a class="button button-primary" href="{{ url_for('load_plan') if current_user else url_for('login') }}">
             Planejar nova carga
             <span aria-hidden="true">→</span>
         </a>
-        <a class="button button-secondary" href="{{ url_for('product_new') }}">Cadastrar produto</a>
+        <a class="button button-secondary" href="{{ url_for('product_new') if current_user else url_for('login') }}">{{ 'Cadastrar produto' if current_user else 'Entrar para alterar' }}</a>
     </div>
 </section>
 
@@ -48,7 +48,7 @@
     {% if recent_products %}
         <div class="compact-list">
             {% for product in recent_products %}
-                <a class="compact-row" href="{{ url_for('product_edit', product_id=product['id']) }}">
+                <a class="compact-row" href="{{ url_for('product_edit', product_id=product['id']) if current_user else url_for('products') }}">
                     <span class="product-avatar">{{ product['name'][0]|upper }}</span>
                     <span class="compact-main"><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span>
                     <span class="compact-metric"><small>Disponível para carga</small><strong>{{ product['available'] }} un.</strong></span>
@@ -62,7 +62,7 @@
             <span class="empty-icon" aria-hidden="true">□</span>
             <h3>Seu inventário está vazio</h3>
             <p>Cadastre os produtos para começar a planejar as cargas dos caminhões.</p>
-            <a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar primeiro produto</a>
+            <a class="button button-primary" href="{{ url_for('product_new') if current_user else url_for('login') }}">{{ 'Cadastrar primeiro produto' if current_user else 'Entrar para cadastrar' }}</a>
         </div>
     {% endif %}
 </section>

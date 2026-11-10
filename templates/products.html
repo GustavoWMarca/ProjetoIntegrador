@@ -8,7 +8,7 @@
         <h1>Produtos cadastrados</h1>
         <p>Gerencie os dados e a disponibilidade de cada item.</p>
     </div>
-    <a class="button button-primary" href="{{ url_for('product_new') }}"><span aria-hidden="true">＋</span> Novo produto</a>
+    {% if current_user %}<a class="button button-primary" href="{{ url_for('product_new') }}"><span aria-hidden="true">＋</span> Novo produto</a>{% else %}<a class="button button-secondary" href="{{ url_for('login') }}">Entrar para alterar</a>{% endif %}
 </div>
 
 <section class="panel table-panel">
@@ -51,12 +51,14 @@
                                 {% if product['reserved'] %}<small class="reserved-note">{{ product['reserved'] }} reservadas de {{ product['quantity'] }}</small>{% endif %}
                             </td>
                             <td>
+                                {% if current_user %}
                                 <div class="row-actions">
                                     <a class="icon-button" title="Editar {{ product['name'] }}" href="{{ url_for('product_edit', product_id=product['id']) }}">✎</a>
                                     <form method="post" action="{{ url_for('product_delete', product_id=product['id']) }}" onsubmit='return confirm({{ ("Excluir o produto “" ~ product["name"] ~ "”?")|tojson }});'>
                                         <button class="icon-button danger" title="Excluir {{ product['name'] }}" type="submit">×</button>
                                     </form>
                                 </div>
+                                {% else %}<span class="muted-action">Login necessário</span>{% endif %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -68,7 +70,7 @@
             <span class="empty-icon" aria-hidden="true">⌕</span>
             <h3>{{ 'Nenhum produto encontrado' if search else 'Nenhum produto cadastrado' }}</h3>
             <p>{{ 'Tente pesquisar usando outro nome ou código.' if search else 'Adicione o primeiro item do seu inventário.' }}</p>
-            {% if not search %}<a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar produto</a>{% endif %}
+            {% if not search %}{% if current_user %}<a class="button button-primary" href="{{ url_for('product_new') }}">Cadastrar produto</a>{% else %}<a class="button button-secondary" href="{{ url_for('login') }}">Entrar para cadastrar</a>{% endif %}{% endif %}
         </div>
     {% endif %}
 </section>

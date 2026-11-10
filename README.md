@@ -9,18 +9,21 @@ O projeto usa Python, Flask e dois bancos SQLite:
 
 Cada produto possui peso e dimensões da embalagem (comprimento, largura e altura em centímetros). Cada carga possui as dimensões internas do caminhão. O sistema calcula posições `(x, y, z)`, permite rotações das caixas e exibe uma visualização 3D simples na prévia e na tela de liberação.
 
+As telas de consulta permanecem disponíveis sem autenticação. Para cadastrar, editar ou excluir produtos, planejar cargas e liberar cargas é necessário entrar no sistema. O banco cria automaticamente o usuário inicial `admin` com a senha `admin`; a senha é armazenada com hash.
+
 ## Fluxo do sistema
 
-1. Cadastre os produtos em **Produtos**.
-2. Acesse **Planejar carga** e identifique o caminhão.
-3. Informe sua capacidade máxima.
-4. Informe comprimento, largura e altura internas do caminhão.
-5. Escolha o segundo limite: orçamento ou quantidade de unidades.
-6. Selecione os produtos e defina o mínimo obrigatório e o máximo permitido de cada um.
-7. Calcule a prévia. O Knapsack maximiza o valor e o empacotador 3D remove somente unidades extras quando a combinação não cabe fisicamente.
-8. Salve a carga. As unidades ficam reservadas e não podem ser usadas em outra carga.
-9. Na tela **Liberar cargas**, confira os itens, posições e visualização 3D e libere o caminhão.
-10. Ao liberar, as quantidades são baixadas do estoque e a carga é apagada das pendências.
+1. Entre com `admin` / `admin` para alterar os dados.
+2. Cadastre os produtos em **Produtos**.
+3. Acesse **Planejar carga** e identifique o caminhão.
+4. Informe sua capacidade máxima.
+5. Informe comprimento, largura e altura internas do caminhão.
+6. Escolha o segundo limite: orçamento ou quantidade de unidades.
+7. Selecione os produtos e defina o mínimo obrigatório e o máximo permitido de cada um.
+8. Calcule a prévia. O Knapsack maximiza o valor e o empacotador 3D remove somente unidades extras quando a combinação não cabe fisicamente.
+9. Salve a carga. As unidades ficam reservadas e não podem ser usadas em outra carga.
+10. Na tela **Liberar cargas**, confira os itens, posições e visualização 3D e libere o caminhão.
+11. Ao liberar, as quantidades são baixadas do estoque e a carga é apagada das pendências.
 
 Produtos com unidades reservadas não podem ser excluídos, e sua quantidade cadastrada não pode ficar abaixo da reserva existente.
 

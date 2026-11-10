@@ -171,9 +171,17 @@ class WebApplicationTests(unittest.TestCase):
             }
         )
         self.client = self.app.test_client()
+        self.login()
 
     def tearDown(self):
         self.temporary_directory.cleanup()
+
+    def login(self):
+        return self.client.post(
+            "/login",
+            data={"username": "admin", "password": "admin"},
+            follow_redirects=True,
+        )
 
     def create_product(self):
         return self.client.post(
@@ -375,6 +383,36 @@ class WebApplicationTests(unittest.TestCase):
         response = self.create_product()
 
         self.assertIn("Já existe um produto".encode(), response.data)
+
+    def test_login_is_required_for_product_changes(self):
+        self.client.post("/logout")
+
+        response = self.client.get("/products/new")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
+        load_response = self.client.get("/loads/plan")
+        self.assertEqual(load_response.status_code, 302)
+        self.assertIn("/login", load_response.headers["Location"])
+        with closing(sqlite3.connect(self.database_path)) as database:
+            self.assertEqual(
+                database.execute("SELECT COUNT(*) FROM products").fetchone()[0],
+                0,
+            )
+
+    def test_default_admin_login_and_logout(self):
+        self.client.post("/logout")
+        invalid = self.client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong"},
+            follow_redirects=True,
+        )
+        self.assertIn("Usuário ou senha inválidos".encode(), invalid.data)
+
+        valid = self.login()
+        self.assertIn(b"admin", valid.data)
+        logged_out = self.client.post("/logout", follow_redirects=True)
+        self.assertIn("Entrar para alterar".encode(), logged_out.data)
 
     def test_dimension_fields_are_saved_and_positions_are_created(self):
         self.create_product()

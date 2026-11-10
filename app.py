@@ -5,6 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from functools import wraps
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -16,8 +17,10 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 WEIGHT_SCALE = 1_000
@@ -92,6 +95,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         init_db()
         init_loads_db()
 
+    @app.context_processor
+    def inject_current_user():
+        return {"current_user": get_current_user()}
+
     return app
 
 
@@ -151,7 +158,19 @@ def init_db() -> None:
             "height_centimeters": "INTEGER NOT NULL DEFAULT 100",
         },
     )
+    ensure_default_admin(database)
     database.commit()
+
+
+def ensure_default_admin(database: sqlite3.Connection) -> None:
+    existing = database.execute(
+        "SELECT id FROM users WHERE username = ?", ("admin",)
+    ).fetchone()
+    if existing is None:
+        database.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            ("admin", generate_password_hash("admin")),
+        )
 
 
 def init_loads_db() -> None:
@@ -196,6 +215,31 @@ def ensure_columns(
             database.execute(
                 f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}'
             )
+
+
+def get_current_user() -> sqlite3.Row | None:
+    if "current_user" not in g:
+        user_id = session.get("user_id")
+        if user_id is None:
+            g.current_user = None
+        else:
+            g.current_user = get_db().execute(
+                "SELECT id, username FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if g.current_user is None:
+                session.pop("user_id", None)
+    return g.current_user
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if get_current_user() is None:
+            flash("Entre para alterar produtos ou cargas.", "error")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped_view
 
 
 @click.command("init-db")
@@ -293,6 +337,34 @@ def seed_example_command() -> None:
 
 
 def register_routes(app: Flask) -> None:
+    @app.route("/login", methods=("GET", "POST"))
+    def login():
+        if get_current_user() is not None:
+            return redirect(url_for("index"))
+        if request.method == "POST":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            user = get_db().execute(
+                "SELECT * FROM users WHERE username = ?", (username,)
+            ).fetchone()
+            if user is None or not check_password_hash(
+                user["password_hash"], password
+            ):
+                flash("Usuário ou senha inválidos.", "error")
+            else:
+                session.clear()
+                session["user_id"] = int(user["id"])
+                flash("Login realizado com sucesso.", "success")
+                return redirect(url_for("index"))
+        return render_template("login.html")
+
+    @app.post("/logout")
+    @login_required
+    def logout():
+        session.clear()
+        flash("Sessão encerrada.", "success")
+        return redirect(url_for("index"))
+
     @app.get("/")
     def index():
         database = get_db()
@@ -347,6 +419,7 @@ def register_routes(app: Flask) -> None:
         return render_template("products.html", products=rows, search=search)
 
     @app.route("/products/new", methods=("GET", "POST"))
+    @login_required
     def product_new():
         form = empty_product_form()
         if request.method == "POST":
@@ -380,6 +453,7 @@ def register_routes(app: Flask) -> None:
         )
 
     @app.route("/products/<int:product_id>/edit", methods=("GET", "POST"))
+    @login_required
     def product_edit(product_id: int):
         database = get_db()
         row = get_product_or_404(database, product_id)
@@ -425,6 +499,7 @@ def register_routes(app: Flask) -> None:
         )
 
     @app.post("/products/<int:product_id>/delete")
+    @login_required
     def product_delete(product_id: int):
         database = get_db()
         row = get_product_or_404(database, product_id)
@@ -446,6 +521,7 @@ def register_routes(app: Flask) -> None:
         return redirect(url_for("load_plan"))
 
     @app.route("/loads/plan", methods=("GET", "POST"))
+    @login_required
     def load_plan():
         products_available = get_available_products()
         form = load_form_from_request(products_available)
@@ -499,6 +575,7 @@ def register_routes(app: Flask) -> None:
         )
 
     @app.post("/loads/<int:load_id>/release")
+    @login_required
     def load_release(load_id: int):
         try:
             load_name = release_load(load_id)
