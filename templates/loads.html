@@ -25,6 +25,7 @@
             <div><small>Custo total</small><strong>{{ load['total_cost_cents']|money }}</strong></div>
             <div><small>Valor agregado</small><strong>{{ load['total_value_units']|score }}</strong></div>
         </div>
+        <p class="load-dimensions"><strong>Dimensões internas:</strong> {{ load['truck_length_centimeters']|dimension }} × {{ load['truck_width_centimeters']|dimension }} × {{ load['truck_height_centimeters']|dimension }} cm</p>
 
         <div class="utilization-grid load-utilization">
             <article><div><span>Ocupação do caminhão</span><strong>{{ load['total_weight_milli']|weight }} / {{ load['max_weight_milli']|weight }}</strong></div><progress value="{{ load['total_weight_milli'] }}" max="{{ load['max_weight_milli'] }}"></progress></article>
@@ -36,9 +37,14 @@
         </div>
 
         <div class="table-scroll load-items-table">
-            <table><thead><tr><th>Produto reservado</th><th>Quantidade</th><th>Carga</th><th>Custo</th></tr></thead><tbody>
-                {% for item in load['items'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product_name'][0]|upper }}</span><span><strong>{{ item['product_name'] }}</strong><small>{{ item['product_code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }} un.</strong></td><td>{{ (item['unit_weight_milli'] * item['quantity'])|weight }}</td><td>{{ (item['unit_cost_cents'] * item['quantity'])|money }}</td></tr>{% endfor %}
+            <table><thead><tr><th>Produto reservado</th><th>Quantidade</th><th>Dimensões</th><th>Carga</th><th>Custo</th></tr></thead><tbody>
+                {% for item in load['items'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product_name'][0]|upper }}</span><span><strong>{{ item['product_name'] }}</strong><small>{{ item['product_code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }} un.</strong></td><td>{{ item['unit_length_centimeters']|dimension }} × {{ item['unit_width_centimeters']|dimension }} × {{ item['unit_height_centimeters']|dimension }} cm</td><td>{{ (item['unit_weight_milli'] * item['quantity'])|weight }}</td><td>{{ (item['unit_cost_cents'] * item['quantity'])|money }}</td></tr>{% endfor %}
             </tbody></table>
+        </div>
+
+        <div class="packing-visualization compact-packing" aria-label="Visualização tridimensional da carga" style="--truck-length: {{ load['truck_length_centimeters'] }}; --truck-width: {{ load['truck_width_centimeters'] }}; --truck-height: {{ load['truck_height_centimeters'] }};">
+            <div class="packing-visualization-label">Visualização 3D · encaixe da carga</div>
+            <div class="packing-truck"><div class="packing-truck-floor"></div>{% for box in load['positions'] %}<div class="packing-box" title="{{ box['product_name'] }} · posição {{ box['x_centimeters']|dimension }}, {{ box['y_centimeters']|dimension }}, {{ box['z_centimeters']|dimension }} cm" style="--left: {{ (box['x_centimeters'] / load['truck_length_centimeters'] * 100)|round(3) }}%; --bottom: {{ (box['y_centimeters'] / load['truck_width_centimeters'] * 100)|round(3) }}%; --box-width: {{ (box['length_centimeters'] / load['truck_length_centimeters'] * 100)|round(3) }}%; --box-depth: {{ (box['width_centimeters'] / load['truck_width_centimeters'] * 100)|round(3) }}%; --zpx: {{ (box['z_centimeters'] / load['truck_height_centimeters'] * 140)|round(2) }}px;"></div>{% endfor %}</div>
         </div>
 
         <div class="release-bar">

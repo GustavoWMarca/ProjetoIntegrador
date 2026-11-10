@@ -27,7 +27,7 @@
                 <thead>
                     <tr>
                         <th>Produto</th>
-                        <th>Carga/espaço</th>
+                        <th>Peso e dimensões</th>
                         <th>Custo unitário</th>
                         <th>Valor agregado</th>
                         <th>Disponibilidade</th>
@@ -43,7 +43,7 @@
                                     <span><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span>
                                 </div>
                             </td>
-                            <td>{{ product['weight_milli']|weight }}</td>
+                            <td><strong>{{ product['weight_milli']|weight }}</strong><small>{{ product['length_centimeters']|dimension }} × {{ product['width_centimeters']|dimension }} × {{ product['height_centimeters']|dimension }} cm</small></td>
                             <td>{{ product['cost_cents']|money }}</td>
                             <td><span class="score-badge">{{ product['value_units']|score }}</span></td>
                             <td>

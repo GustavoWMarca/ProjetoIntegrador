@@ -6,10 +6,42 @@ from itertools import product as cartesian_product
 from pathlib import Path
 from random import Random
 
-from app import create_app, optimize_inventory, parse_scaled_decimal
+from app import create_app, optimize_inventory, pack_quantities, parse_scaled_decimal
 
 
 class KnapsackAlgorithmTests(unittest.TestCase):
+    def test_3d_packing_places_boxes_without_overlap(self):
+        products = {
+            1: {
+                "id": 1,
+                "length_centimeters": 600,
+                "width_centimeters": 400,
+                "height_centimeters": 300,
+            }
+        }
+
+        placements = pack_quantities({1: 2}, products, (1_200, 400, 300))
+
+        self.assertIsNotNone(placements)
+        assert placements is not None
+        self.assertEqual(len(placements), 2)
+        self.assertNotEqual(
+            (placements[0].x, placements[0].y, placements[0].z),
+            (placements[1].x, placements[1].y, placements[1].z),
+        )
+
+    def test_3d_packing_rejects_boxes_that_do_not_fit(self):
+        products = {
+            1: {
+                "id": 1,
+                "length_centimeters": 600,
+                "width_centimeters": 400,
+                "height_centimeters": 300,
+            }
+        }
+
+        self.assertIsNone(pack_quantities({1: 2}, products, (600, 400, 300)))
+
     def test_finds_exact_bounded_solution_with_two_constraints(self):
         products = [
             {
@@ -150,6 +182,9 @@ class WebApplicationTests(unittest.TestCase):
                 "code": "P001",
                 "name": "Cafeteira",
                 "weight": "3,200",
+                "length": "30,00",
+                "width": "20,00",
+                "height": "15,00",
                 "cost": "180,00",
                 "value": "270,00",
                 "quantity": "4",
@@ -164,6 +199,9 @@ class WebApplicationTests(unittest.TestCase):
                 "code": "P002",
                 "name": "Ferro",
                 "weight": "8,000",
+                "length": "30,00",
+                "width": "15,00",
+                "height": "15,00",
                 "cost": "70,00",
                 "value": "50,00",
                 "quantity": "4",
@@ -176,6 +214,9 @@ class WebApplicationTests(unittest.TestCase):
             "name": "Entrega Centro",
             "truck_identifier": "ABC1D23",
             "max_weight": "6,400",
+            "truck_length": "100,00",
+            "truck_width": "100,00",
+            "truck_height": "100,00",
             "constraint_mode": mode,
             "max_budget": "360,00",
             "max_units": "2",
@@ -197,6 +238,9 @@ class WebApplicationTests(unittest.TestCase):
                 "code": "P001",
                 "name": "Cafeteira Premium",
                 "weight": "3,500",
+                "length": "31,00",
+                "width": "21,00",
+                "height": "16,00",
                 "cost": "200,00",
                 "value": "310,00",
                 "quantity": "2",
@@ -217,6 +261,9 @@ class WebApplicationTests(unittest.TestCase):
                 "name": "Entrega Centro",
                 "truck_identifier": "ABC1D23",
                 "max_weight": "6,400",
+                "truck_length": "100,00",
+                "truck_width": "100,00",
+                "truck_height": "100,00",
                 "constraint_mode": "budget",
                 "max_budget": "360,00",
                 "include_1": "1",
@@ -328,6 +375,41 @@ class WebApplicationTests(unittest.TestCase):
         response = self.create_product()
 
         self.assertIn("Já existe um produto".encode(), response.data)
+
+    def test_dimension_fields_are_saved_and_positions_are_created(self):
+        self.create_product()
+
+        response = self.client.post(
+            "/loads/plan",
+            data={
+                "name": "Carga 3D",
+                "truck_identifier": "DIM1234",
+                "max_weight": "10,000",
+                "truck_length": "100,00",
+                "truck_width": "100,00",
+                "truck_height": "100,00",
+                "constraint_mode": "quantity",
+                "max_units": "2",
+                "include_1": "1",
+                "min_1": "1",
+                "max_1": "2",
+                "action": "save",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertIn("Visualização 3D".encode(), response.data)
+        with closing(sqlite3.connect(self.loads_database_path)) as database:
+            self.assertEqual(
+                database.execute("SELECT COUNT(*) FROM load_positions").fetchone()[0],
+                2,
+            )
+            self.assertEqual(
+                database.execute(
+                    "SELECT truck_length_centimeters FROM loads"
+                ).fetchone()[0],
+                10_000,
+            )
 
 
 if __name__ == "__main__":

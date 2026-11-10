@@ -23,7 +23,9 @@ from flask import (
 WEIGHT_SCALE = 1_000
 MONEY_SCALE = 100
 VALUE_SCALE = 100
+DIMENSION_SCALE = 100
 MAX_PARETO_STATES = 250_000
+MAX_PACKING_BOXES = 20_000
 
 
 class ValidationError(ValueError):
@@ -44,6 +46,22 @@ class KnapsackState:
     quantity: int = 0
 
 
+@dataclass(frozen=True)
+class PackedBox:
+    product_id: int
+    sequence: int
+    x: int
+    y: int
+    z: int
+    length: int
+    width: int
+    height: int
+
+
+class PackingError(ValidationError):
+    """Indica que a combinação selecionada não cabe fisicamente no caminhão."""
+
+
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
@@ -60,9 +78,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
     app.cli.add_command(seed_demo_command)
+    app.cli.add_command(seed_example_command)
     app.jinja_env.filters["money"] = format_money
     app.jinja_env.filters["number_pt"] = format_number_pt
     app.jinja_env.filters["weight"] = format_weight
+    app.jinja_env.filters["dimension"] = format_dimension
     app.jinja_env.filters["score"] = format_score
     app.jinja_env.filters["datetime_pt"] = format_datetime_pt
 
@@ -122,6 +142,15 @@ def init_db() -> None:
 
     with current_app.open_resource("schema.sql") as schema_file:
         database.executescript(schema_file.read().decode("utf-8"))
+    ensure_columns(
+        database,
+        "products",
+        {
+            "length_centimeters": "INTEGER NOT NULL DEFAULT 100",
+            "width_centimeters": "INTEGER NOT NULL DEFAULT 100",
+            "height_centimeters": "INTEGER NOT NULL DEFAULT 100",
+        },
+    )
     database.commit()
 
 
@@ -131,8 +160,42 @@ def init_loads_db() -> None:
 
     with current_app.open_resource("loads_schema.sql") as schema_file:
         database.executescript(schema_file.read().decode("utf-8"))
+    ensure_columns(
+        database,
+        "loads",
+        {
+            "truck_length_centimeters": "INTEGER NOT NULL DEFAULT 1000",
+            "truck_width_centimeters": "INTEGER NOT NULL DEFAULT 1000",
+            "truck_height_centimeters": "INTEGER NOT NULL DEFAULT 1000",
+        },
+    )
+    ensure_columns(
+        database,
+        "load_items",
+        {
+            "unit_length_centimeters": "INTEGER NOT NULL DEFAULT 100",
+            "unit_width_centimeters": "INTEGER NOT NULL DEFAULT 100",
+            "unit_height_centimeters": "INTEGER NOT NULL DEFAULT 100",
+        },
+    )
     database.execute("PRAGMA optimize")
     database.commit()
+
+
+def ensure_columns(
+    database: sqlite3.Connection,
+    table: str,
+    columns: dict[str, str],
+) -> None:
+    existing = {
+        str(row[1])
+        for row in database.execute(f'PRAGMA table_info("{table}")').fetchall()
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            database.execute(
+                f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}'
+            )
 
 
 @click.command("init-db")
@@ -146,22 +209,87 @@ def init_db_command() -> None:
 def seed_demo_command() -> None:
     database = get_db()
     demo_products = [
-        ("P001", "Cafeteira", 3_200, 18_000, 27_000, 4),
-        ("P002", "Liquidificador", 2_100, 11_000, 16_500, 7),
-        ("P003", "Ferro elétrico", 1_350, 7_500, 10_000, 8),
-        ("P004", "Ventilador", 4_800, 22_000, 33_000, 3),
-        ("P005", "Sanduicheira", 2_700, 13_500, 20_000, 5),
+        ("P001", "Cafeteira", 3_200, 30_00, 35_00, 18_000, 27_000, 4),
+        ("P002", "Liquidificador", 2_100, 25_00, 20_00, 40_00, 11_000, 16_500, 7),
+        ("P003", "Ferro elétrico", 1_350, 30_00, 15_00, 15_00, 7_500, 10_000, 8),
+        ("P004", "Ventilador", 4_800, 45_00, 20_00, 50_00, 22_000, 33_000, 3),
+        ("P005", "Sanduicheira", 2_700, 30_00, 25_00, 12_00, 13_500, 20_000, 5),
     ]
     database.executemany(
         """
         INSERT OR IGNORE INTO products
-            (code, name, weight_milli, cost_cents, value_units, quantity)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (code, name, weight_milli, length_centimeters,
+             width_centimeters, height_centimeters, cost_cents,
+             value_units, quantity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         demo_products,
     )
     database.commit()
     click.echo("Produtos de demonstração adicionados.")
+
+
+@click.command("seed-example")
+def seed_example_command() -> None:
+    """Recria dados locais de demonstração, incluindo uma carga 3D pendente."""
+    database = get_db()
+    loads_database = get_loads_db()
+    loads_database.execute("DELETE FROM load_positions")
+    loads_database.execute("DELETE FROM load_items")
+    loads_database.execute("DELETE FROM loads")
+    database.execute("DELETE FROM products")
+    demo_products = [
+        ("P001", "Cafeteira", 3_200, 3_000, 2_500, 3_500, 18_000, 27_000, 12),
+        ("P002", "Liquidificador", 2_100, 2_500, 2_000, 4_000, 11_000, 16_500, 10),
+        ("P003", "Ferro elétrico", 1_350, 3_000, 1_500, 1_500, 7_500, 10_000, 14),
+        ("P004", "Ventilador", 4_800, 4_500, 2_000, 5_000, 22_000, 33_000, 6),
+        ("P005", "Sanduicheira", 2_700, 3_000, 2_500, 1_200, 13_500, 20_000, 8),
+        ("P006", "Micro-ondas", 9_500, 5_500, 4_500, 3_500, 45_000, 65_000, 3),
+    ]
+    database.executemany(
+        """
+        INSERT INTO products (
+            code, name, weight_milli, length_centimeters,
+            width_centimeters, height_centimeters, cost_cents,
+            value_units, quantity
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        demo_products,
+    )
+    database.commit()
+    loads_database.commit()
+    ids = {
+        row["code"]: int(row["id"])
+        for row in database.execute("SELECT id, code FROM products")
+    }
+    selected_ids = {ids[code] for code in ("P001", "P002", "P003", "P004", "P005")}
+    products = get_available_products()
+    form = {
+        "name": "Carga demonstração - Rota Centro",
+        "truck_identifier": "DEMO-3D",
+        "max_weight": "20,000",
+        "truck_length": "600,00",
+        "truck_width": "240,00",
+        "truck_height": "260,00",
+        "constraint_mode": "quantity",
+        "max_budget": "",
+        "max_units": "8",
+        "selected_ids": selected_ids,
+        "minimums": {product_id: "1" for product_id in selected_ids},
+        "maximums": {
+            product_id: str(
+                next(
+                    product["available"]
+                    for product in products
+                    if int(product["id"]) == product_id
+                )
+            )
+            for product_id in selected_ids
+        },
+    }
+    result = calculate_load_plan(form, products)
+    save_load(form, result)
+    click.echo("Dados de demonstração recriados com produtos e uma carga 3D pendente.")
 
 
 def register_routes(app: Flask) -> None:
@@ -229,8 +357,10 @@ def register_routes(app: Flask) -> None:
                 database.execute(
                     """
                     INSERT INTO products
-                        (code, name, weight_milli, cost_cents, value_units, quantity)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (code, name, weight_milli, length_centimeters,
+                         width_centimeters, height_centimeters, cost_cents,
+                         value_units, quantity)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     product,
                 )
@@ -268,7 +398,9 @@ def register_routes(app: Flask) -> None:
                 database.execute(
                     """
                     UPDATE products
-                    SET code = ?, name = ?, weight_milli = ?, cost_cents = ?,
+                    SET code = ?, name = ?, weight_milli = ?,
+                        length_centimeters = ?, width_centimeters = ?,
+                        height_centimeters = ?, cost_cents = ?,
                         value_units = ?, quantity = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
@@ -351,8 +483,15 @@ def register_routes(app: Flask) -> None:
         items_by_load: dict[int, list[sqlite3.Row]] = {}
         for item in items:
             items_by_load.setdefault(item["load_id"], []).append(item)
+        positions = database.execute(
+            "SELECT * FROM load_positions ORDER BY load_id, sequence"
+        ).fetchall()
+        positions_by_load: dict[int, list[sqlite3.Row]] = {}
+        for position in positions:
+            positions_by_load.setdefault(position["load_id"], []).append(position)
         for load in load_rows:
             load["items"] = items_by_load.get(load["id"], [])
+            load["positions"] = positions_by_load.get(load["id"], [])
         return render_template(
             "loads.html",
             loads=load_rows,
@@ -432,6 +571,15 @@ def load_form_from_request(products: Iterable[dict[str, Any]]) -> dict[str, Any]
         "name": request.form.get("name", "").strip(),
         "truck_identifier": request.form.get("truck_identifier", "").strip(),
         "max_weight": request.form.get("max_weight", "").strip(),
+        "truck_length": request.form.get(
+            "truck_length", "600" if request.method == "GET" else "1000"
+        ).strip(),
+        "truck_width": request.form.get(
+            "truck_width", "240" if request.method == "GET" else "1000"
+        ).strip(),
+        "truck_height": request.form.get(
+            "truck_height", "260" if request.method == "GET" else "1000"
+        ).strip(),
         "constraint_mode": request.form.get("constraint_mode", "budget").strip(),
         "max_budget": request.form.get("max_budget", "").strip(),
         "max_units": request.form.get("max_units", "").strip(),
@@ -457,6 +605,15 @@ def calculate_load_plan(
 
     max_weight = parse_scaled_decimal(
         form["max_weight"], WEIGHT_SCALE, "Capacidade do caminhão", False
+    )
+    truck_length = parse_scaled_decimal(
+        form["truck_length"], DIMENSION_SCALE, "Comprimento interno do caminhão", False
+    )
+    truck_width = parse_scaled_decimal(
+        form["truck_width"], DIMENSION_SCALE, "Largura interna do caminhão", False
+    )
+    truck_height = parse_scaled_decimal(
+        form["truck_height"], DIMENSION_SCALE, "Altura interna do caminhão", False
     )
     mode = form["constraint_mode"]
     if mode not in {"budget", "quantity"}:
@@ -596,6 +753,37 @@ def calculate_load_plan(
             "Nenhum dos produtos selecionados cabe nos limites informados."
         )
 
+    quantities, placements, packing_adjusted = fit_quantities_to_truck(
+        quantities,
+        mandatory_quantities,
+        products_by_id,
+        (truck_length, truck_width, truck_height),
+    )
+    if not quantities:
+        raise PackingError(
+            "Os produtos selecionados não cabem nas dimensões internas do caminhão."
+        )
+    total_weight = sum(
+        int(products_by_id[product_id]["weight_milli"]) * quantity
+        for product_id, quantity in quantities.items()
+    )
+    total_cost = sum(
+        int(products_by_id[product_id]["cost_cents"]) * quantity
+        for product_id, quantity in quantities.items()
+    )
+    total_units = sum(quantities.values())
+    total_value = sum(
+        int(products_by_id[product_id]["value_units"]) * quantity
+        for product_id, quantity in quantities.items()
+    )
+    solution.update(
+        total_weight=total_weight,
+        total_cost=total_cost,
+        total_units=total_units,
+        total_value=total_value,
+        quantities=quantities,
+    )
+
     selected = []
     for product_id, quantity in sorted(
         solution["quantities"].items(),
@@ -627,6 +815,11 @@ def calculate_load_plan(
         "mandatory_units": mandatory_units,
         "remaining_weight": max_weight - solution["total_weight"],
         "remaining_constraint": constraint_limit - constraint_used,
+        "truck_length": truck_length,
+        "truck_width": truck_width,
+        "truck_height": truck_height,
+        "placements": placements,
+        "packing_adjusted": packing_adjusted,
     }
 
 
@@ -637,15 +830,20 @@ def save_load(form: dict[str, Any], result: dict[str, Any]) -> int:
             """
             INSERT INTO loads (
                 name, truck_identifier, constraint_mode, max_weight_milli,
+                truck_length_centimeters, truck_width_centimeters,
+                truck_height_centimeters,
                 max_budget_cents, max_units, total_weight_milli,
                 total_cost_cents, total_value_units, total_units
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 form["name"],
                 form["truck_identifier"],
                 result["constraint_mode"],
                 result["max_weight"],
+                result["truck_length"],
+                result["truck_width"],
+                result["truck_height"],
                 result["max_budget"],
                 result["max_units"],
                 result["total_weight"],
@@ -659,8 +857,10 @@ def save_load(form: dict[str, Any], result: dict[str, Any]) -> int:
             """
             INSERT INTO load_items (
                 load_id, product_id, product_code, product_name,
-                unit_weight_milli, unit_cost_cents, unit_value_units, quantity
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                unit_weight_milli, unit_length_centimeters,
+                unit_width_centimeters, unit_height_centimeters,
+                unit_cost_cents, unit_value_units, quantity
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -669,11 +869,42 @@ def save_load(form: dict[str, Any], result: dict[str, Any]) -> int:
                     item["product"]["code"],
                     item["product"]["name"],
                     item["product"]["weight_milli"],
+                    item["product"]["length_centimeters"],
+                    item["product"]["width_centimeters"],
+                    item["product"]["height_centimeters"],
                     item["product"]["cost_cents"],
                     item["product"]["value_units"],
                     item["quantity"],
                 )
                 for item in result["selected"]
+            ],
+        )
+        database.executemany(
+            """
+            INSERT INTO load_positions (
+                load_id, product_id, product_name, sequence,
+                x_centimeters, y_centimeters, z_centimeters,
+                length_centimeters, width_centimeters, height_centimeters
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    load_id,
+                    placement.product_id,
+                    next(
+                        item["product"]["name"]
+                        for item in result["selected"]
+                        if int(item["product"]["id"]) == placement.product_id
+                    ),
+                    placement.sequence,
+                    placement.x,
+                    placement.y,
+                    placement.z,
+                    placement.length,
+                    placement.width,
+                    placement.height,
+                )
+                for placement in result["placements"]
             ],
         )
         database.execute("PRAGMA optimize")
@@ -682,6 +913,157 @@ def save_load(form: dict[str, Any], result: dict[str, Any]) -> int:
         database.rollback()
         raise
     return load_id
+
+
+def fit_quantities_to_truck(
+    quantities: dict[int, int],
+    mandatory_quantities: dict[int, int],
+    products_by_id: dict[int, dict[str, Any]],
+    truck_dimensions: tuple[int, int, int],
+) -> tuple[dict[int, int], list[PackedBox], bool]:
+    """Ajusta a solução do Knapsack até que as caixas caibam fisicamente.
+
+    O Knapsack continua responsável por maximizar o valor. O empacotador 3D
+    valida as posições e, se necessário, remove unidades extras de menor valor
+    relativo, preservando sempre as quantidades mínimas obrigatórias.
+    """
+    current = dict(quantities)
+    adjusted = False
+    while current:
+        placements = pack_quantities(current, products_by_id, truck_dimensions)
+        if placements is not None:
+            return current, placements, adjusted
+
+        removable = [
+            product_id
+            for product_id, quantity in current.items()
+            if quantity > mandatory_quantities.get(product_id, 0)
+        ]
+        if not removable:
+            return {}, [], adjusted
+        product_id = min(
+            removable,
+            key=lambda candidate_id: (
+                int(products_by_id[candidate_id]["value_units"])
+                / max(1, int(products_by_id[candidate_id]["length_centimeters"]))
+                / max(1, int(products_by_id[candidate_id]["width_centimeters"]))
+                / max(1, int(products_by_id[candidate_id]["height_centimeters"])),
+                int(products_by_id[candidate_id]["value_units"]),
+            ),
+        )
+        current[product_id] -= 1
+        if current[product_id] <= 0:
+            del current[product_id]
+        adjusted = True
+    return {}, [], adjusted
+
+
+def pack_quantities(
+    quantities: dict[int, int],
+    products_by_id: dict[int, dict[str, Any]],
+    truck_dimensions: tuple[int, int, int],
+) -> list[PackedBox] | None:
+    boxes: list[tuple[int, int, int, int, int]] = []
+    for product_id, quantity in quantities.items():
+        product = products_by_id[product_id]
+        dimensions = (
+            int(product["length_centimeters"]),
+            int(product["width_centimeters"]),
+            int(product["height_centimeters"]),
+        )
+        if any(dimension <= 0 for dimension in dimensions):
+            return None
+        boxes.extend((product_id, index, *dimensions) for index in range(quantity))
+    if len(boxes) > MAX_PACKING_BOXES:
+        raise PackingError(
+            "A carga possui unidades demais para calcular o encaixe 3D. "
+            "Reduza o limite de quantidade ou divida a carga."
+        )
+
+    truck_length, truck_width, truck_height = truck_dimensions
+    points: set[tuple[int, int, int]] = {(0, 0, 0)}
+    placed: list[PackedBox] = []
+    for product_id, sequence, length, width, height in sorted(
+        boxes,
+        key=lambda item: item[2] * item[3] * item[4],
+        reverse=True,
+    ):
+        candidate: PackedBox | None = None
+        for point in sorted(points, key=lambda value: (value[2], value[1], value[0])):
+            for rotated in unique_rotations((length, width, height)):
+                candidate_box = PackedBox(
+                    product_id=product_id,
+                    sequence=sequence + 1,
+                    x=point[0],
+                    y=point[1],
+                    z=point[2],
+                    length=rotated[0],
+                    width=rotated[1],
+                    height=rotated[2],
+                )
+                if not within_truck(candidate_box, truck_dimensions):
+                    continue
+                if any(boxes_overlap(candidate_box, existing) for existing in placed):
+                    continue
+                candidate = candidate_box
+                break
+            if candidate is not None:
+                break
+        if candidate is None:
+            return None
+        placed.append(candidate)
+        points.discard((candidate.x, candidate.y, candidate.z))
+        points.update(
+            {
+                (candidate.x + candidate.length, candidate.y, candidate.z),
+                (candidate.x, candidate.y + candidate.width, candidate.z),
+                (candidate.x, candidate.y, candidate.z + candidate.height),
+            }
+        )
+        points = {
+            point
+            for point in points
+            if point[0] < truck_length
+            and point[1] < truck_width
+            and point[2] < truck_height
+        }
+    return placed
+
+
+def unique_rotations(dimensions: tuple[int, int, int]) -> list[tuple[int, int, int]]:
+    length, width, height = dimensions
+    return list(
+        dict.fromkeys(
+            (
+                (length, width, height),
+                (length, height, width),
+                (width, length, height),
+                (width, height, length),
+                (height, length, width),
+                (height, width, length),
+            )
+        )
+    )
+
+
+def within_truck(box: PackedBox, dimensions: tuple[int, int, int]) -> bool:
+    truck_length, truck_width, truck_height = dimensions
+    return (
+        box.x + box.length <= truck_length
+        and box.y + box.width <= truck_width
+        and box.z + box.height <= truck_height
+    )
+
+
+def boxes_overlap(first: PackedBox, second: PackedBox) -> bool:
+    return not (
+        first.x + first.length <= second.x
+        or second.x + second.length <= first.x
+        or first.y + first.width <= second.y
+        or second.y + second.width <= first.y
+        or first.z + first.height <= second.z
+        or second.z + second.height <= first.z
+    )
 
 
 def release_load(load_id: int) -> str:
@@ -743,6 +1125,9 @@ def empty_product_form() -> dict[str, str]:
         "code": "",
         "name": "",
         "weight": "",
+        "length": "",
+        "width": "",
+        "height": "",
         "cost": "",
         "value": "",
         "quantity": "",
@@ -750,7 +1135,10 @@ def empty_product_form() -> dict[str, str]:
 
 
 def product_form_from_request() -> dict[str, str]:
-    return {field: request.form.get(field, "").strip() for field in empty_product_form()}
+    form = {field: request.form.get(field, "").strip() for field in empty_product_form()}
+    for field in ("length", "width", "height"):
+        form[field] = request.form.get(field, "1").strip()
+    return form
 
 
 def product_form_from_row(row: sqlite3.Row) -> dict[str, str]:
@@ -758,13 +1146,22 @@ def product_form_from_row(row: sqlite3.Row) -> dict[str, str]:
         "code": row["code"],
         "name": row["name"],
         "weight": scaled_decimal_string(row["weight_milli"], WEIGHT_SCALE, 3),
+        "length": scaled_decimal_string(
+            row["length_centimeters"], DIMENSION_SCALE, 2
+        ),
+        "width": scaled_decimal_string(row["width_centimeters"], DIMENSION_SCALE, 2),
+        "height": scaled_decimal_string(
+            row["height_centimeters"], DIMENSION_SCALE, 2
+        ),
         "cost": scaled_decimal_string(row["cost_cents"], MONEY_SCALE, 2),
         "value": scaled_decimal_string(row["value_units"], VALUE_SCALE, 2),
         "quantity": str(row["quantity"]),
     }
 
 
-def validate_product_form(form: dict[str, str]) -> tuple[str, str, int, int, int, int]:
+def validate_product_form(
+    form: dict[str, str],
+) -> tuple[str, str, int, int, int, int, int, int, int]:
     code = form["code"].strip().upper()
     name = form["name"].strip()
     if not code:
@@ -779,6 +1176,13 @@ def validate_product_form(form: dict[str, str]) -> tuple[str, str, int, int, int
     weight = parse_scaled_decimal(
         form["weight"], WEIGHT_SCALE, "Peso/carga unitária", False
     )
+    length = parse_scaled_decimal(
+        form["length"], DIMENSION_SCALE, "Comprimento", False
+    )
+    width = parse_scaled_decimal(form["width"], DIMENSION_SCALE, "Largura", False)
+    height = parse_scaled_decimal(
+        form["height"], DIMENSION_SCALE, "Altura", False
+    )
     cost = parse_scaled_decimal(form["cost"], MONEY_SCALE, "Custo", True)
     value = parse_scaled_decimal(form["value"], VALUE_SCALE, "Valor agregado", True)
 
@@ -791,7 +1195,7 @@ def validate_product_form(form: dict[str, str]) -> tuple[str, str, int, int, int
     if quantity > 1_000_000:
         raise ValidationError("A quantidade informada é muito alta.")
 
-    return code, name, weight, cost, value, quantity
+    return code, name, weight, length, width, height, cost, value, quantity
 
 
 def parse_scaled_decimal(
@@ -1006,6 +1410,12 @@ def format_money(value: int) -> str:
 def format_weight(value: int) -> str:
     number = Decimal(value) / WEIGHT_SCALE
     formatted = f"{number:,.3f}".rstrip("0").rstrip(".")
+    return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def format_dimension(value: int) -> str:
+    number = Decimal(value) / DIMENSION_SCALE
+    formatted = f"{number:,.2f}".rstrip("0").rstrip(".")
     return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
 
 

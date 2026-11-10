@@ -6,9 +6,9 @@
     <div>
         <span class="eyebrow">Algoritmo da Mochila</span>
         <h1>Planejar carga do caminhão</h1>
-        <p>Escolha os produtos candidatos e encontre a combinação de maior valor para o veículo.</p>
+        <p>Escolha os produtos candidatos e encontre a combinação de maior valor que também cabe fisicamente no veículo.</p>
     </div>
-    <span class="algorithm-badge"><span></span> Solução exata</span>
+    <span class="algorithm-badge"><span></span> Knapsack + encaixe 3D</span>
 </div>
 
 <form id="load-plan-form" method="post" class="load-plan-form">
@@ -30,6 +30,15 @@
                 <label for="max_weight">Capacidade máxima de carga</label>
                 <div class="input-suffix"><input id="max_weight" name="max_weight" inputmode="decimal" value="{{ form['max_weight'] }}" placeholder="Ex.: 12.500,000" required><span>un.</span></div>
             </div>
+        </div>
+        <div class="form-section-heading compact-heading">
+            <span class="section-number">01B</span>
+            <div><h2>Dimensões internas do caminhão</h2><p>Espaço útil para o encaixe 3D, em centímetros.</p></div>
+        </div>
+        <div class="form-grid three-columns">
+            <div class="field"><label for="truck_length">Comprimento interno</label><div class="input-suffix"><input id="truck_length" name="truck_length" inputmode="decimal" value="{{ form['truck_length'] }}" placeholder="Ex.: 600,00" required><span>cm</span></div></div>
+            <div class="field"><label for="truck_width">Largura interna</label><div class="input-suffix"><input id="truck_width" name="truck_width" inputmode="decimal" value="{{ form['truck_width'] }}" placeholder="Ex.: 240,00" required><span>cm</span></div></div>
+            <div class="field"><label for="truck_height">Altura interna</label><div class="input-suffix"><input id="truck_height" name="truck_height" inputmode="decimal" value="{{ form['truck_height'] }}" placeholder="Ex.: 260,00" required><span>cm</span></div></div>
         </div>
     </section>
 
@@ -71,7 +80,7 @@
         {% if products %}
             <div class="table-scroll">
                 <table class="selection-table">
-                    <thead><tr><th class="check-column"><span class="sr-only">Selecionar</span></th><th>Produto</th><th>Carga unitária</th><th>Custo</th><th>Valor</th><th>Disponível</th><th>Mínimo obrigatório</th><th>Máximo permitido</th></tr></thead>
+                    <thead><tr><th class="check-column"><span class="sr-only">Selecionar</span></th><th>Produto</th><th>Carga unitária</th><th>Dimensões</th><th>Custo</th><th>Valor</th><th>Disponível</th><th>Mínimo obrigatório</th><th>Máximo permitido</th></tr></thead>
                     <tbody>
                         {% for product in products %}
                             {% set selected = product['id'] in form['selected_ids'] %}
@@ -79,6 +88,7 @@
                                 <td class="check-column"><input class="product-checkbox" type="checkbox" id="include_{{ product['id'] }}" name="include_{{ product['id'] }}" value="1" {{ 'checked' if selected else '' }} {{ 'disabled' if product['available'] == 0 else '' }} data-product-checkbox></td>
                                 <td><label class="product-cell selectable-product" for="include_{{ product['id'] }}"><span class="product-avatar small">{{ product['name'][0]|upper }}</span><span><strong>{{ product['name'] }}</strong><small>{{ product['code'] }}</small></span></label></td>
                                 <td>{{ product['weight_milli']|weight }}</td>
+                                <td>{{ product['length_centimeters']|dimension }} × {{ product['width_centimeters']|dimension }} × {{ product['height_centimeters']|dimension }} cm</td>
                                 <td>{{ product['cost_cents']|money }}</td>
                                 <td><span class="score-badge">{{ product['value_units']|score }}</span></td>
                                 <td><strong>{{ product['available'] }}</strong>{% if product['reserved'] %}<small class="reserved-note">{{ product['reserved'] }} reservadas</small>{% endif %}</td>
@@ -119,9 +129,14 @@
     </div>
     <div class="result-table-wrap preview-table-wrap">
         <table class="result-table">
-            <thead><tr><th>Produto</th><th>Qtd.</th><th>Carga</th><th>Custo</th><th>Valor</th></tr></thead>
-            <tbody>{% for item in result['selected'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product']['name'][0]|upper }}</span><span><strong>{{ item['product']['name'] }}</strong><small>{{ item['product']['code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }}</strong></td><td>{{ item['subtotal_weight']|weight }}</td><td>{{ item['subtotal_cost']|money }}</td><td><span class="score-badge">{{ item['subtotal_value']|score }}</span></td></tr>{% endfor %}</tbody>
+            <thead><tr><th>Produto</th><th>Qtd.</th><th>Dimensões</th><th>Carga</th><th>Custo</th><th>Valor</th></tr></thead>
+            <tbody>{% for item in result['selected'] %}<tr><td><div class="product-cell"><span class="product-avatar small">{{ item['product']['name'][0]|upper }}</span><span><strong>{{ item['product']['name'] }}</strong><small>{{ item['product']['code'] }}</small></span></div></td><td><strong>{{ item['quantity'] }}</strong></td><td>{{ item['product']['length_centimeters']|dimension }} × {{ item['product']['width_centimeters']|dimension }} × {{ item['product']['height_centimeters']|dimension }} cm</td><td>{{ item['subtotal_weight']|weight }}</td><td>{{ item['subtotal_cost']|money }}</td><td><span class="score-badge">{{ item['subtotal_value']|score }}</span></td></tr>{% endfor %}</tbody>
         </table>
+    </div>
+    <div class="packing-summary"><strong>Encaixe 3D:</strong> {{ result['truck_length']|dimension }} × {{ result['truck_width']|dimension }} × {{ result['truck_height']|dimension }} cm · {{ result['placements']|length }} unidade(s) posicionada(s).{% if result['packing_adjusted'] %} A seleção foi ajustada para respeitar o espaço físico.{% endif %}</div>
+    <div class="packing-visualization" aria-label="Visualização tridimensional da carga" style="--truck-length: {{ result['truck_length'] }}; --truck-width: {{ result['truck_width'] }}; --truck-height: {{ result['truck_height'] }};">
+        <div class="packing-visualization-label">Visualização 3D do caminhão</div>
+        <div class="packing-truck"><div class="packing-truck-floor"></div>{% for box in result['placements'] %}<div class="packing-box" title="{{ box.product_id }} · {{ box.length|dimension }} × {{ box.width|dimension }} × {{ box.height|dimension }} cm" style="--left: {{ (box.x / result['truck_length'] * 100)|round(3) }}%; --bottom: {{ (box.y / result['truck_width'] * 100)|round(3) }}%; --box-width: {{ (box.length / result['truck_length'] * 100)|round(3) }}%; --box-depth: {{ (box.width / result['truck_width'] * 100)|round(3) }}%; --zpx: {{ (box.z / result['truck_height'] * 140)|round(2) }}px;"></div>{% endfor %}</div>
     </div>
     <p class="calculation-meta">{{ result['mandatory_units'] }} unidades mínimas garantidas · {{ result['total_units'] }} unidades selecionadas · {{ result['states_evaluated']|number_pt }} estados finais avaliados</p>
 </section>

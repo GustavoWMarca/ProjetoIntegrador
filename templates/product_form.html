@@ -50,6 +50,24 @@
                 <small>Pontuação que o algoritmo maximiza.</small>
             </div>
         </div>
+        <div class="form-section-heading compact-heading">
+            <span class="section-number">03</span>
+            <div><h2>Dimensões da embalagem</h2><p>Medidas externas de cada unidade, em centímetros.</p></div>
+        </div>
+        <div class="form-grid three-columns">
+            <div class="field">
+                <label for="length">Comprimento</label>
+                <div class="input-suffix"><input id="length" name="length" inputmode="decimal" value="{{ form['length'] }}" placeholder="Ex.: 30,00" required><span>cm</span></div>
+            </div>
+            <div class="field">
+                <label for="width">Largura</label>
+                <div class="input-suffix"><input id="width" name="width" inputmode="decimal" value="{{ form['width'] }}" placeholder="Ex.: 20,00" required><span>cm</span></div>
+            </div>
+            <div class="field">
+                <label for="height">Altura</label>
+                <div class="input-suffix"><input id="height" name="height" inputmode="decimal" value="{{ form['height'] }}" placeholder="Ex.: 15,00" required><span>cm</span></div>
+            </div>
+        </div>
         <div class="form-grid stock-row">
             <div class="field">
                 <label for="quantity">Quantidade disponível</label>
