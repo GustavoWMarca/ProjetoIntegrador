@@ -73,6 +73,20 @@ Para inicializar ou atualizar a estrutura dos bancos sem apagar os registros:
 
 Pesos são arredondados para três casas decimais e dimensões para duas. Medidas positivas que seriam arredondadas para zero são rejeitadas com uma mensagem de validação. Custo e valor agregado continuam aceitando zero.
 
+### Catálogo amplo para testes
+
+Os bancos incluídos no repositório foram preenchidos com 60 produtos e 913.400 unidades: acessórios pequenos, eletrodomésticos, móveis, materiais e embalagens de formatos variados. Há de 800 a 100.000 unidades por produto. Pesos estão em kg, dimensões em cm e custos em reais; todos os dados são fictícios para demonstração. Quando o produto é descrito como caixa, pacote ou kit, cada unidade cadastrada representa essa embalagem completa.
+
+O script abaixo mostra os totais sem alterar os bancos:
+
+```powershell
+.venv\Scripts\python.exe scripts/populate_varied_inventory.py
+```
+
+Para substituir o estoque pelo catálogo amplo, use o mesmo comando com `--apply`. Ele cria uma cópia dos dois bancos em `../backups`, remove produtos e cargas de demonstração e preserva usuários. Se houver cargas com nomes que não começam com `Carga demonstração`, a operação é bloqueada. As cópias de segurança ficam fora do repositório.
+
+A quantidade em estoque não é a quantidade obrigatória em uma carga. Para experimentar o planejamento com esse catálogo, selecione os produtos desejados e defina máximos menores por item, conforme o caminhão. O limite de 20.000 caixas por tentativa de encaixe e o limite de estados do Knapsack continuam em vigor.
+
 ## Algoritmo
 
 O sistema implementa o **Knapsack limitado multidimensional** por programação dinâmica esparsa:
