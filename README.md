@@ -55,13 +55,23 @@ python -m venv .venv
 .venv\Scripts\python.exe -m flask --app app seed-demo
 ```
 
-O comando adiciona produtos de demonstração com dimensões. Para recriar completamente os dados locais de exemplo, remova os dois arquivos SQLite e execute o comando novamente; a aplicação recria os bancos automaticamente na próxima inicialização.
+O comando adiciona cinco produtos de demonstração com dimensões. Códigos já cadastrados são preservados; executar novamente não duplica os produtos.
 
 Para recriar produtos e uma carga pendente com posições 3D em um único passo:
 
 ```powershell
 .venv\Scripts\python.exe -m flask --app app seed-example
 ```
+
+Esse comando substitui todos os produtos e cargas pendentes por dados de exemplo, preservando os usuários. Use-o apenas quando desejar recriar os dados de demonstração.
+
+Para inicializar ou atualizar a estrutura dos bancos sem apagar os registros:
+
+```powershell
+.venv\Scripts\python.exe -m flask --app app init-db
+```
+
+Pesos são arredondados para três casas decimais e dimensões para duas. Medidas positivas que seriam arredondadas para zero são rejeitadas com uma mensagem de validação. Custo e valor agregado continuam aceitando zero.
 
 ## Algoritmo
 
@@ -84,7 +94,7 @@ As quantidades são decompostas em blocos binários. A programação dinâmica e
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Os testes cobrem os dois modos de limite, comparação com força bruta, números decimais, CRUD, dimensões de produtos, empacotamento 3D, reservas, bancos separados e liberação com baixa de estoque.
+Os testes cobrem os dois modos de limite, comparação com força bruta, números decimais, CRUD, dimensões de produtos, empacotamento 3D, reservas, bancos separados e liberação com baixa de estoque. Também verificam os três comandos de banco sem contexto manual, execução repetida dos dados de exemplo e rejeição de medidas que seriam arredondadas para zero. Os testes utilizam bancos temporários, sem recriar os bancos locais do projeto.
 
 ## Estrutura
 

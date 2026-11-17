@@ -20,6 +20,7 @@ from flask import (
     session,
     url_for,
 )
+from flask.cli import with_appcontext
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -243,6 +244,7 @@ def login_required(view):
 
 
 @click.command("init-db")
+@with_appcontext
 def init_db_command() -> None:
     init_db()
     init_loads_db()
@@ -250,10 +252,11 @@ def init_db_command() -> None:
 
 
 @click.command("seed-demo")
+@with_appcontext
 def seed_demo_command() -> None:
     database = get_db()
     demo_products = [
-        ("P001", "Cafeteira", 3_200, 30_00, 35_00, 18_000, 27_000, 4),
+        ("P001", "Cafeteira", 3_200, 30_00, 25_00, 35_00, 18_000, 27_000, 4),
         ("P002", "Liquidificador", 2_100, 25_00, 20_00, 40_00, 11_000, 16_500, 7),
         ("P003", "Ferro elétrico", 1_350, 30_00, 15_00, 15_00, 7_500, 10_000, 8),
         ("P004", "Ventilador", 4_800, 45_00, 20_00, 50_00, 22_000, 33_000, 3),
@@ -274,6 +277,7 @@ def seed_demo_command() -> None:
 
 
 @click.command("seed-example")
+@with_appcontext
 def seed_example_command() -> None:
     """Recria dados locais de demonstração, incluindo uma carga 3D pendente."""
     database = get_db()
@@ -1305,6 +1309,12 @@ def parse_scaled_decimal(
         raise ValidationError(f"{label} deve ser {comparison}.")
 
     scaled = (number * scale).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    if scaled == 0 and not allow_zero:
+        resolution = format(Decimal(1) / Decimal(scale), "f").replace(".", ",")
+        raise ValidationError(
+            f"{label} informado é pequeno demais e seria arredondado para zero. "
+            f"A resolução deste campo é {resolution}."
+        )
     if scaled > 2_000_000_000:
         raise ValidationError(f"{label} informado é muito alto.")
     return int(scaled)

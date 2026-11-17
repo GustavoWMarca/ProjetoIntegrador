@@ -6,7 +6,13 @@ from itertools import product as cartesian_product
 from pathlib import Path
 from random import Random
 
-from app import create_app, optimize_inventory, pack_quantities, parse_scaled_decimal
+from app import (
+    ValidationError,
+    create_app,
+    optimize_inventory,
+    pack_quantities,
+    parse_scaled_decimal,
+)
 
 
 class KnapsackAlgorithmTests(unittest.TestCase):
@@ -110,6 +116,30 @@ class KnapsackAlgorithmTests(unittest.TestCase):
         )
         self.assertEqual(parse_scaled_decimal("2,750", 1_000, "Peso", False), 2_750)
 
+    def test_rejects_positive_measurements_that_round_to_zero(self):
+        for raw, scale, label in (
+            ("0,0001", 1_000, "Peso"),
+            ("0,001", 100, "Comprimento"),
+            ("0,0049", 100, "Altura"),
+        ):
+            with self.subTest(raw=raw, scale=scale):
+                with self.assertRaises(ValidationError):
+                    parse_scaled_decimal(raw, scale, label, False)
+
+    def test_rounding_preserves_small_valid_measurements_and_optional_zero(self):
+        for raw, scale, expected in (
+            ("0,001", 1_000, 1),
+            ("0,0005", 1_000, 1),
+            ("0,01", 100, 1),
+            ("0,005", 100, 1),
+        ):
+            with self.subTest(raw=raw, scale=scale):
+                self.assertEqual(
+                    parse_scaled_decimal(raw, scale, "Medida", False), expected
+                )
+        for raw in ("0", "0,001"):
+            self.assertEqual(parse_scaled_decimal(raw, 100, "Custo", True), 0)
+
     def test_matches_brute_force_on_small_random_cases(self):
         random = Random(2026)
         for case_number in range(100):
@@ -152,6 +182,80 @@ class KnapsackAlgorithmTests(unittest.TestCase):
                 expected_value,
                 msg=f"Falha no caso aleatório {case_number}",
             )
+
+
+class DatabaseCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.database_path = str(Path(self.directory.name) / "stock.db")
+        self.loads_database_path = str(Path(self.directory.name) / "loads.db")
+        self.app = create_app({
+            "TESTING": True,
+            "SECRET_KEY": "test",
+            "DATABASE": self.database_path,
+            "LOADS_DATABASE": self.loads_database_path,
+        })
+        self.runner = self.app.test_cli_runner()
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def invoke(self, name):
+        # No manual application context: the command must supply its own.
+        result = self.runner.invoke(args=[name])
+        self.assertEqual(result.exit_code, 0, repr(result.exception))
+        return result
+
+    def test_init_db_can_run_twice_without_losing_existing_data(self):
+        with closing(sqlite3.connect(self.database_path)) as database:
+            database.execute(
+                "INSERT INTO products (code, name, weight_milli, cost_cents, "
+                "value_units, quantity) VALUES ('KEEP', 'Preservar', 1000, 100, 100, 1)"
+            )
+            database.commit()
+        self.invoke("init-db")
+        self.invoke("init-db")
+        with closing(sqlite3.connect(self.database_path)) as database:
+            self.assertEqual(database.execute("SELECT code FROM products").fetchall(), [("KEEP",)])
+            self.assertEqual(database.execute("SELECT username FROM users").fetchall(), [("admin",)])
+
+    def test_seed_demo_saves_all_product_fields_without_duplicates(self):
+        self.invoke("seed-demo")
+        self.invoke("seed-demo")
+        with closing(sqlite3.connect(self.database_path)) as database:
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM products").fetchone()[0], 5)
+            self.assertEqual(
+                database.execute(
+                    "SELECT weight_milli, length_centimeters, width_centimeters, "
+                    "height_centimeters, cost_cents, value_units, quantity "
+                    "FROM products WHERE code = 'P001'"
+                ).fetchone(),
+                (3200, 3000, 2500, 3500, 18000, 27000, 4),
+            )
+
+    def test_seed_example_recreates_one_load_with_matching_positions(self):
+        self.invoke("seed-example")
+        self.invoke("seed-example")
+        with closing(sqlite3.connect(self.database_path)) as database:
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM products").fetchone()[0], 6)
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
+            product_ids = {row[0] for row in database.execute("SELECT id FROM products")}
+        with closing(sqlite3.connect(self.loads_database_path)) as database:
+            loads = database.execute("SELECT id, total_units FROM loads").fetchall()
+            self.assertEqual(len(loads), 1)
+            load_id, units = loads[0]
+            items = dict(database.execute(
+                "SELECT product_id, quantity FROM load_items WHERE load_id = ?", (load_id,)
+            ))
+            positions = dict(database.execute(
+                "SELECT product_id, COUNT(*) FROM load_positions WHERE load_id = ? "
+                "GROUP BY product_id", (load_id,)
+            ))
+            self.assertEqual(len(items), 5)
+            self.assertTrue(set(items) <= product_ids)
+            self.assertEqual(items, positions)
+            self.assertEqual(sum(items.values()), units)
+            self.assertEqual(database.execute("PRAGMA foreign_key_check").fetchall(), [])
 
 
 class WebApplicationTests(unittest.TestCase):
@@ -383,6 +487,36 @@ class WebApplicationTests(unittest.TestCase):
         response = self.create_product()
 
         self.assertIn("Já existe um produto".encode(), response.data)
+
+    def test_rejects_tiny_product_measurements_before_database_insert(self):
+        for field, raw in (("weight", "0,0001"), ("length", "0,001")):
+            with self.subTest(field=field):
+                data = {
+                    "code": "TINY", "name": "Medida pequena", "weight": "1",
+                    "length": "1", "width": "1", "height": "1",
+                    "cost": "0", "value": "1", "quantity": "1",
+                }
+                data[field] = raw
+                response = self.client.post("/products/new", data=data)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("pequeno demais".encode(), response.data)
+                self.assertNotIn("Já existe um produto".encode(), response.data)
+        with closing(sqlite3.connect(self.database_path)) as database:
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM products").fetchone()[0], 0)
+
+    def test_rejects_tiny_truck_dimensions_without_saving_load(self):
+        self.create_product()
+        response = self.client.post("/loads/plan", data={
+            "name": "Carga inválida", "truck_identifier": "TEST",
+            "max_weight": "10", "truck_length": "0,001",
+            "truck_width": "100", "truck_height": "100",
+            "constraint_mode": "quantity", "max_units": "1",
+            "include_1": "1", "min_1": "1", "max_1": "1", "action": "save",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pequeno demais".encode(), response.data)
+        with closing(sqlite3.connect(self.loads_database_path)) as database:
+            self.assertEqual(database.execute("SELECT COUNT(*) FROM loads").fetchone()[0], 0)
 
     def test_login_is_required_for_product_changes(self):
         self.client.post("/logout")
